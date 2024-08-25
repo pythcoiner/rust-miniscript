@@ -582,22 +582,71 @@ impl<Pk: MiniscriptKey, Ctx: ScriptContext> Miniscript<Pk, Ctx> {
 
     /// Substitutes raw public keys hashes with the public keys as provided by map.
     pub fn substitute_raw_pkh(&self, pk_map: &BTreeMap<hash160::Hash, Pk>) -> Miniscript<Pk, Ctx> {
-        let mut translated = vec![];
-        for data in Arc::new(self.clone()).post_order_iter() {
-            let new_term = if let Terminal::RawPkH(ref p) = data.node.node {
-                match pk_map.get(p) {
-                    Some(pk) => Terminal::PkH(pk.clone()),
-                    None => Terminal::RawPkH(*p),
-                }
-            } else {
-                data.node.node.clone()
-            };
+        let new_term = match &self.node {
+            Terminal::RawPkH(ref p) => match pk_map.get(p) {
+                Some(pk) => Terminal::PkH(pk.clone()),
+                None => Terminal::RawPkH(*p),
+            },
+            Terminal::Alt(sub) => Terminal::Alt(Arc::new(sub.substitute_raw_pkh(pk_map))),
+            Terminal::Swap(sub) => Terminal::Swap(Arc::new(sub.substitute_raw_pkh(pk_map))),
+            Terminal::Check(sub) => Terminal::Check(Arc::new(sub.substitute_raw_pkh(pk_map))),
+            Terminal::DupIf(sub) => Terminal::DupIf(Arc::new(sub.substitute_raw_pkh(pk_map))),
+            Terminal::Verify(sub) => Terminal::Verify(Arc::new(sub.substitute_raw_pkh(pk_map))),
+            Terminal::NonZero(sub) => Terminal::NonZero(Arc::new(sub.substitute_raw_pkh(pk_map))),
+            Terminal::ZeroNotEqual(sub) => {
+                Terminal::ZeroNotEqual(Arc::new(sub.substitute_raw_pkh(pk_map)))
+            }
+            Terminal::AndV(left, right) => Terminal::AndV(
+                Arc::new(left.substitute_raw_pkh(pk_map)),
+                Arc::new(right.substitute_raw_pkh(pk_map)),
+            ),
+            Terminal::AndB(left, right) => Terminal::AndB(
+                Arc::new(left.substitute_raw_pkh(pk_map)),
+                Arc::new(right.substitute_raw_pkh(pk_map)),
+            ),
+            Terminal::OrB(left, right) => Terminal::OrB(
+                Arc::new(left.substitute_raw_pkh(pk_map)),
+                Arc::new(right.substitute_raw_pkh(pk_map)),
+            ),
+            Terminal::OrD(left, right) => Terminal::OrD(
+                Arc::new(left.substitute_raw_pkh(pk_map)),
+                Arc::new(right.substitute_raw_pkh(pk_map)),
+            ),
+            Terminal::OrC(left, right) => Terminal::OrC(
+                Arc::new(left.substitute_raw_pkh(pk_map)),
+                Arc::new(right.substitute_raw_pkh(pk_map)),
+            ),
+            Terminal::OrI(left, right) => Terminal::OrI(
+                Arc::new(left.substitute_raw_pkh(pk_map)),
+                Arc::new(right.substitute_raw_pkh(pk_map)),
+            ),
+            Terminal::AndOr(a, b, c) => Terminal::AndOr(
+                Arc::new(a.substitute_raw_pkh(pk_map)),
+                Arc::new(b.substitute_raw_pkh(pk_map)),
+                Arc::new(c.substitute_raw_pkh(pk_map)),
+            ),
+            Terminal::Thresh(t) => {
+                let new_subs = t
+                    .iter()
+                    .map(|sub| Arc::new(sub.substitute_raw_pkh(pk_map)))
+                    .collect();
+                Terminal::Thresh(crate::Threshold::new(t.k(), new_subs).expect("k does not change"))
+            }
+            // Multi doesn't contain any RawPkH to substitute
+            Terminal::Multi(t) => Terminal::Multi(t.clone()),
+            Terminal::MultiA(t) => Terminal::MultiA(t.clone()),
+            Terminal::True | Terminal::False | Terminal::PkK(_) | Terminal::PkH(_) => {
+                self.node.clone()
+            }
+            Terminal::After(n) => Terminal::After(*n),
+            Terminal::Older(n) => Terminal::Older(*n),
+            Terminal::Sha256(hash) => Terminal::Sha256(hash.clone()),
+            Terminal::Hash256(hash) => Terminal::Hash256(hash.clone()),
+            Terminal::Ripemd160(hash) => Terminal::Ripemd160(hash.clone()),
+            Terminal::Hash160(hash) => Terminal::Hash160(hash.clone()),
+        };
 
-            let new_ms = Miniscript::from_ast(new_term).expect("typeck");
-            translated.push(Arc::new(new_ms));
-        }
-
-        Arc::try_unwrap(translated.pop().unwrap()).unwrap()
+        Miniscript::from_ast(new_term).expect("typeck")
     }
 }
 
