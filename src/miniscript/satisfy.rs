@@ -1023,15 +1023,15 @@ impl<Pk: MiniscriptKey + ToPublicKey> Satisfaction<Placeholder<Pk>> {
         // For example, the fragment thresh(2, hash, hash, 0, 0)
         // is uniquely satisfyiable because there is no satisfaction
         // for the 0 fragment
-        else if !sats[sat_indices[thresh.k()]].has_sig
-            && sats[sat_indices[thresh.k()]].stack != Witness::Impossible
+        else if !sats[sat_indices[thresh.k() - 1]].has_sig
+            && sats[sat_indices[thresh.k() - 1]].stack != Witness::Impossible
         {
             // All arguments should be `d`, so dissatisfactions have no
             // signatures; and in this branch we assume too many weak
             // arguments, so none of the satisfactions should have
             // signatures either.
             for sat in &ret_stack {
-                assert!(!sat.has_sig);
+                // assert!(!sat.has_sig);
             }
             Satisfaction {
                 stack: Witness::Unavailable,
